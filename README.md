@@ -138,6 +138,56 @@ esac
 
 exit 0
 
+==========================
+#!/bin/bash
+#
+# filebeat:          Startup script for Filebeat Log Shipper.
+#
+# chkconfig: 3 80 05
+# description:      Startup script for Filebeat Log Shipper standalone
+
+FILEBEAT_HOME=/root;
+export FILEBEAT_HOME
+
+start() {
+       echo -n "Starting Filebeat: "
+       echo "Starting Filebeat at `date`" >> $FILEBEAT_HOME/startup.log
+       /usr/share/filebeat/bin/filebeat \
+      -path.home /usr/share/filebeat \
+      -path.config /etc/filebeat \
+      -path.data /var/lib/filebeat \
+      -path.logs /var/log/filebeat -e &
+       sleep 2
+       echo "done"
+}
+
+stop() {
+       echo -n "Stopping Filebeat: "
+       echo "Stopping Filebeat at `date`" >> $FILEBEAT_HOME/startup.log
+       su $FILEBEAT_OWNER -c "pkill filebeat"
+       echo "done"
+}
+
+# See how we were called.
+case "$1" in
+       start)
+               start
+               ;;
+       stop)
+               stop
+               ;;
+       restart)
+               stop
+               start
+               ;;
+       status)
+               if pgrep -fl "/usr/share/filebeat/bin/filebeat" > /dev/null;then echo running;else echo not running;fi
+               ;;
+       *)
+               echo $"Usage: filebeat {start|stop|restart}"
+               exit
+esac
+
 
 
 
