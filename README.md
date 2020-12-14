@@ -1,83 +1,143 @@
-# ssh
+#!/bin/sh
+#
+# filebeat        Startup script for filebeat
+#
+# chkconfig: - 85 15
+# processname: filebeat
+# config: /etc/filebeat/filebeat.yml
+# pidfile: /var/run/filebeat.pid
+# description: Filebeat is the next-generation Logstash Forwarder designed to quickly and reliably ship log file data to Logstash or Elasticsearch while only consuming a fraction of the resources.
+#
+### BEGIN INIT INFO
+# Provides: filebeat
+# Required-Start: $local_fs $remote_fs $network
+# Required-Stop: $local_fs $remote_fs $network
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: start and stop filebeat
+### END INIT INFO
 
-#### Table of Contents
+NAME=filebeat
+FILEBEAT_USER=filebeat
+FILEBEAT_HOME="/usr"
+FILEBEAT_CONFIG="/etc/filebeat/filebeat.yml"
 
-1. [Description](#description)
-1. [Setup - The basics of getting started with ssh](#setup)
-    * [What ssh affects](#what-ssh-affects)
-    * [Setup requirements](#setup-requirements)
-    * [Beginning with ssh](#beginning-with-ssh)
-1. [Usage - Configuration options and additional functionality](#usage)
-1. [Reference - An under-the-hood peek at what the module is doing and how](#reference)
-1. [Limitations - OS compatibility, etc.](#limitations)
-1. [Development - Guide for contributing to the module](#development)
+filebeat_pid() {
+    echo `ps aux | grep filebeat | grep -v grep | awk '{ print $2 }'`
+}
 
-## Description
+start() {
+  # Start filebeat
+  echo "Starting Filebeat"
+  /bin/su - -c "cd $FILEBEAT_HOME/bin && $FILEBEAT_HOME/bin/filebeat -c $FILEBEAT_CONFIG > /dev/null 2>&1 &" $FILEBEAT_USER
+  return 0
+}
 
-Start with a one- or two-sentence summary of what the module does and/or what
-problem it solves. This is your 30-second elevator pitch for your module.
-Consider including OS/Puppet version it works with.
+stop() {
+  pid=$(filebeat_pid)
+  echo "Shutting down Filebeat"
+  kill -9 $pid
+  return 0
+}
 
-You can give more descriptive information in a second paragraph. This paragraph
-should answer the questions: "What does this module *do*?" and "Why would I use
-it?" If your module has a range of functionality (installation, configuration,
-management, etc.), this is the time to mention it.
+case $1 in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    status)
+       pid=$(filebeat_pid)
+        if [ -n "$pid" ]
+        then
+           echo "Filebeat is running with pid: $pid"
+        else
+           echo "Filebeat is not running"
+        fi
+        ;;
+    *)
+        echo $"Usage: $NAME {start|stop|restart|status}"
+esac
 
-## Setup
+exit 0
 
-### What ssh affects **OPTIONAL**
 
-If it's obvious what your module touches, you can skip this section. For
-example, folks can probably figure out that your mysql_instance module affects
-their MySQL instances.
+----------------------------------------------
 
-If there's more that they should know about, though, this is the place to mention:
 
-* A list of files, packages, services, or operations that the module will alter,
-  impact, or execute.
-* Dependencies that your module automatically installs.
-* Warnings or other important notices.
+#!/bin/sh
+#
+# filebeat        Startup script for filebeat
+#
+# chkconfig: - 85 15
+# processname: filebeat
+# config: /etc/filebeat/filebeat.yml
+# pidfile: /var/run/filebeat.pid
+# description: Filebeat is the next-generation Logstash Forwarder designed to quickly and reliably ship log file data to Logstash or Elasticsearch while only consuming a fraction of the resources.
+#
+### BEGIN INIT INFO
+# Provides: filebeat
+# Required-Start: $local_fs $remote_fs $network
+# Required-Stop: $local_fs $remote_fs $network
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: start and stop filebeat
+### END INIT INFO
 
-### Setup Requirements **OPTIONAL**
+NAME=filebeat
+FILEBEAT_USER=filebeat
+FILEBEAT_HOME="/usr"
+FILEBEAT_CONFIG="/etc/filebeat/filebeat.yml"
 
-If your module requires anything extra before setting up (pluginsync enabled,
-etc.), mention it here.
+filebeat_pid() {
+    echo `ps aux | grep filebeat | grep -v grep | awk '{ print $2 }'`
+}
 
-If your most recent release breaks compatibility or requires particular steps
-for upgrading, you might want to include an additional "Upgrading" section
-here.
+start() {
+  # Start filebeat
+  echo "Starting Filebeat"
+  /bin/su - -c "cd $FILEBEAT_HOME/bin && $FILEBEAT_HOME/bin/filebeat -c $FILEBEAT_CONFIG > /dev/null 2>&1 &" $FILEBEAT_USER
+  return 0
+}
 
-### Beginning with ssh
+stop() {
+  pid=$(filebeat_pid)
+  echo "Shutting down Filebeat"
+  kill -9 $pid
+  return 0
+}
 
-The very basic steps needed for a user to get the module up and running. This
-can include setup steps, if necessary, or it can be an example of the most
-basic use of the module.
+case $1 in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart)
+        stop
+        start
+        ;;
+    status)
+       pid=$(filebeat_pid)
+        if [ -n "$pid" ]
+        then
+           echo "Filebeat is running with pid: $pid"
+        else
+           echo "Filebeat is not running"
+        fi
+        ;;
+    *)
+        echo $"Usage: $NAME {start|stop|restart|status}"
+esac
 
-## Usage
+exit 0
 
-This section is where you describe how to customize, configure, and do the
-fancy stuff with your module here. It's especially helpful if you include usage
-examples and code samples for doing things with your module.
 
-## Reference
 
-Here, include a complete list of your module's classes, types, providers,
-facts, along with the parameters for each. Users refer to this section (thus
-the name "Reference") to find specific details; most users don't read it per
-se.
 
-## Limitations
-
-This is where you list OS compatibility, version compatibility, etc. If there
-are Known Issues, you might want to include them under their own heading here.
-
-## Development
-
-Since your module is awesome, other users will want to play with it. Let them
-know what the ground rules for contributing are.
-
-## Release Notes/Contributors/Etc. **Optional**
-
-If you aren't using changelog, put your release notes here (though you should
-consider using changelog). You can also add any additional sections you feel
-are necessary or important to include here. Please use the `## ` header.
