@@ -1,12 +1,23 @@
-# The baseline for module testing used by Puppet Labs is that each manifest
-# should have a corresponding test manifest that declares that class or defined
-# type.
-#
-# Tests are then run by using puppet apply --noop (to check for compilation
-# errors and view a log of events) or by fully applying the test in a virtual
-# environment (to compare the resulting system state to the desired state).
-#
-# Learn more about module testing here:
-# https://docs.puppet.com/guides/tests_smoke.html
-#
-include ::ssh
+#!/bin/bash
+
+# Elasticsearch connection settings
+ELASTICSEARCH_HOST="your-elasticsearch-host"
+ELASTICSEARCH_PORT="9200"
+USERNAME="elastic"
+PASSWORD="test"
+EXCLUDE_PATTERN=".monitoring*"
+
+# Get a list of all data streams
+DATA_STREAMS=$(curl -s -u "$USERNAME:$PASSWORD" -X GET "https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}/_data_stream" | jq -r 'keys[]')
+
+# Iterate through the data streams and delete them (excluding system data streams)
+for DATA_STREAM in $DATA_STREAMS; do
+  # Check if the data stream matches the exclude pattern
+  if [[ "$DATA_STREAM" != *$EXCLUDE_PATTERN* ]]; then
+    # Delete the data stream
+    echo "Deleting data stream: $DATA_STREAM"
+    curl -X DELETE -u "$USERNAME:$PASSWORD" "https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}/_data_stream/$DATA_STREAM"
+  else
+    echo "Skipping system data stream: $DATA_STREAM"
+  fi
+done
