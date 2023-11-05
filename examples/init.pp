@@ -21,3 +21,12 @@ for DATA_STREAM in $DATA_STREAMS; do
     echo "Skipping system data stream: $DATA_STREAM"
   fi
 done
+
+
+logging.level: info # Adjust the log level as needed
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0644
