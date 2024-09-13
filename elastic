@@ -1,80 +1,27 @@
-Elasticsearch:
-The term "batch reduce size" (in this case, set to 512) refers to how Elasticsearch reduces intermediate query results in a search request when dealing with a large number of shards. By default, Elasticsearch reduces search results in batches from each shard to avoid out-of-memory errors or performance degradation during the query execution process.
+- stage: Build
+    jobs:
+      - job: BuildJob
+        pool:
+          name: ${{ variables['agentPoolName'] }}
+        steps:
+          - task: Bash@3
+            inputs:
+              targetType: 'inline'
+              script: |
+                # Get the current repo name dynamically in bash
+                currentRepoName=$(echo $BUILD_REPOSITORY_NAME)
 
-What "batched_reduce_size" Does:
-Batched Reduce: When Elasticsearch performs a distributed search across many shards, it gathers the results in batches. The parameter batched_reduce_size controls how many shard results are reduced together before moving on to the next batch.
-Default Behavior: If this value is too high for your cluster resources, it can cause memory pressure. Elasticsearch must hold the batch of results in memory before reducing them to the final set of search results.
-Why Is This Relevant to Your Error?
-Given that you are encountering a "all shards failed" error, the batched_reduce_size setting of 512 might be too large for your cluster's current state, leading to memory pressure or timeouts. If your cluster's resources (RAM, heap space, etc.) are limited or under stress, reducing the batched_reduce_size to a smaller number might help in alleviating this problem.
-
-What You Can Do:
-Lower the batched_reduce_size:
-
-Try setting the batched_reduce_size to a lower value, such as 64 or 128, to see if that resolves the issue.
-This can be done by adjusting the query settings.
-
-{
-  "batched_reduce_size": 128
-}
-Increase Cluster Resources:
-
-Ensure your Elasticsearch cluster has enough memory (RAM, heap space) to handle large searches and aggregations.
-If the issue persists even with a lower batch size, you may need to scale up your cluster.
-Check Heap Memory:
-
-Ensure Elasticsearch has sufficient heap memory allocated by checking your JVM settings. Elasticsearch requires enough memory to reduce the result batches, especially when you’re querying large datasets.
-Limit the Number of Concurrent Shards:
-
-You can also reduce the max_concurrent_shard_requests if too many shards are queried simultaneously, which could overload the cluster. Example:
-{
-  "max_concurrent_shard_requests": 2
-}
-
-Conclusion:
-The batched_reduce_size of 512 may be too high for your current cluster configuration, causing memory or performance issues, which in turn leads to the "all shards failed" error. Reducing the value should ease the load and potentially resolve the issue.
-
-Setting the HTTP max_content_length to 500 (assuming 500 MB) in Elasticsearch configures the maximum size of an HTTP request body that Elasticsearch will accept. This includes requests such as bulk indexing and large queries.
-
-Will It Fix Your Issue?
-It might help in cases where you are sending very large requests, but it may not directly resolve your issue of "all shards failed." Here's why:
-
-When It Helps: If your search request or any part of the query is larger than the default max_content_length (which is set to 100 MB in Elasticsearch), increasing it to 500 MB could resolve issues where Elasticsearch is rejecting the request due to its size.
-
-Example scenario:
-
-You are sending a large query or bulk indexing data, and Elasticsearch is rejecting it because the request body exceeds the allowed limit.
-Increasing the limit would allow the request to go through without triggering a rejection.
-When It Won't Help:
-
-If your error is related to shard failures or resource limitations (like memory or overloaded nodes), increasing the max_content_length won't resolve it.
-The "all shards failed" issue is more likely related to the following:
-Shard corruption
-Insufficient cluster resources (memory, CPU)
-Misconfiguration in shard allocation
-Large batched reductions as discussed earlier
-In such cases, adjusting the batch size (batched_reduce_size), checking memory limits, or even reindexing your data may be more effective.
-
-
-POST /your-index/_search
-{
-  "size": 10,  # Optional, specifies the number of hits to return
-  "query": {
-    "match": {
-      "field_name": "search_term"
-    }
-  },
-  "batched_reduce_size": 128  # This is where you set the batched reduce size
-}
-
-curl -X POST "localhost:9200/your-index/_search" -H 'Content-Type: application/json' -d'
-{
-  "size": 10,
-  "query": {
-    "match": {
-      "field_name": "search_term"
-    }
-  },
-  "batched_reduce_size": 128,
-  "max_concurrent_shard_requests": 2
-}
-'
+                # Check if 'app-name.yml' exists in the same directory
+                if [[ -f "./app-name.yml" ]]; then
+                  # Check if the current repo is listed in app-name.yml
+                  if grep -q "$currentRepoName" ./app-name.yml; then
+                    echo "Using 'main' pool for $currentRepoName"
+                    echo "##vso[task.setvariable variable=agentPoolName]main"
+                  else
+                    echo "Using 'Prod' pool for $currentRepoName"
+                    echo "##vso[task.setvariable variable=agentPoolName]Prod"
+                  fi
+                else
+                  echo "'app-name.yml' not found, using default 'Prod' pool"
+                  echo "##vso[task.setvariable variable=agentPoolName]Prod"
+                fi
