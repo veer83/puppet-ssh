@@ -1,48 +1,24 @@
-# Class: ssh
-# ===========================
-#
-# Full description of class ssh here.
-#
-# Parameters
-# ----------
-#
-# Document parameters here.
-#
-# * `sample parameter`
-# Explanation of what this parameter affects and what it defaults to.
-# e.g. "Specify one or more upstream ntp servers as an array."
-#
-# Variables
-# ----------
-#
-# Here you should define a list of variables that this module would require.
-#
-# * `sample variable`
-#  Explanation of how this variable affects the function of this class and if
-#  it has a default. e.g. "The parameter enc_ntp_servers must be set by the
-#  External Node Classifier as a comma separated list of hostnames." (Note,
-#  global variables should be avoided in favor of class parameters as
-#  of Puppet 2.6.)
-#
-# Examples
-# --------
-#
-# @example
-#    class { 'ssh':
-#      servers => [ 'pool.ntp.org', 'ntp.local.company.com' ],
-#    }
-#
-# Authors
-# -------
-#
-# Author Name <author@domain.com>
-#
-# Copyright
-# ---------
-#
-# Copyright 2018 Your name here, unless otherwise noted.
-#
-class ssh {
+oc-cluster() {
+    if [ -z "$1" ]; then
+        echo "Usage: oc-cluster <cluster-name>"
+        return 1
+    fi
 
+    local api_url=""
+    case $1 in
+        cluster1)
+            api_url="https://api.cluster1.example.com"
+            ;;
+        cluster2)
+            api_url="https://api.cluster2.example.com"
+            ;;
+        *)
+            echo "Unknown cluster: $1"
+            return 1
+            ;;
+    esac
 
+    read -s -p "Enter API token: " token
+    echo
+    oc login "$api_url" --token="$token"
 }
