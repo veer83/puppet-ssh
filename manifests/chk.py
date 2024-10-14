@@ -3,7 +3,7 @@ import yaml
 
 # Variables
 NAMESPACE = "your-namespace"  # Replace with the namespace you want to use
-SEARCH_KEYWORD = "artifactory-qa"
+SEARCH_KEYWORD = "ar"
 
 
 def get_build_configs(namespace):
