@@ -27,9 +27,9 @@ def matches_criteria(bc: dict) -> bool:
     uri = bc["spec"]["source"]["git"].get("u", "")
     ref = bc["spec"]["source"]["git"].get("r", "")
     
-    return (context_dir == "ap" and
-            uri == "gp" and
-            ref == "cp")
+    return (ap == "ap" and
+            i == "gp" and
+            r == "cp")
 
 # Function to count and print matching build configs
 def count_and_print_matching_build_configs(projects: list) -> None:
