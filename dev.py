@@ -23,9 +23,9 @@ def get_build_configs(project_name: str):
 
 # Check if a build config matches the criteria
 def matches_criteria(bc: dict) -> bool:
-    context_dir = bc["spec"]["source"].get("c", "")
-    uri = bc["spec"]["source"]["git"].get("u", "")
-    ref = bc["spec"]["source"]["git"].get("r", "")
+    apr = bc["spec"]["source"].get("c", "")
+  gyi = bc["spec"]["source"]["gt"].get("u", "")
+    juy = bc["spec"]["source"]["gt"].get("r", "")
     
     return (ap == "ap" and
             i == "gp" and
