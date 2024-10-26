@@ -7,9 +7,9 @@ PRODUCT_LIST_FILE = "./output/products.yaml"
 # Path to the output directory for Swagger files
 OUTPUT_DIR = "./output"
 # Path to the shell script for downloading Swagger
-GET_SWAGGER_SCRIPT = "./get_swagger_by_name.sh"
+GET_SWAGGER_SCRIPT = ""
 # Path to the shell script for downloading product list
-GET_PRODUCTS_SCRIPT = "./get_all_products.sh"
+GET_PRODUCTS_SCRIPT = "
 
 # Ensure the output directory exists
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -51,9 +51,9 @@ def download_swagger(env, name, version):
 
 def main():
     # Environment variable (e.g., dev, prod)
-    env = "dev"
-catalog = "central"
-space = "cs"
+    env = ""
+catalog = ""
+space = ""
 
     # Download the product list
     download_product_list(env)
