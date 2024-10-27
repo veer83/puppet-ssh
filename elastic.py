@@ -4,16 +4,16 @@ import yaml
 import getpass
 
 # Paths to scripts
-login_script_path = "./apic_login.sh"
-list_products_script_path = "./list_products.sh"
-get_swagger_script_path = "./get_swagger_by_name.sh"
+login_script_path = ""
+list_products_script_path = ""
+get_swagger_script_path = ""
 
 # Product list file path
-PRODUCT_LIST_DIR = "/private/tmp/output"
+PRODUCT_LIST_DIR = "/tmp/output"
 
 # Step 0: Create output directory
 def create_output_directory():
-    output_dir = "/private/tmp/output/"
+    output_dir = "/tmp/output/"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
         print(f"Created output directory at {output_dir}")
