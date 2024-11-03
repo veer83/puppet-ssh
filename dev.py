@@ -20,7 +20,7 @@ logging.basicConfig(
 )
 
 # API endpoint and headers
-api_url = "https://sbx-shr-ue1-aws-apigw01.devhcloud.bmogc.net/sandbox/api/apic-doc/save"
+api_url = ""
 headers = {
     "Content-Type": "application/json",
     "User-Agent": "",
