@@ -10,24 +10,12 @@ from datetime import datetime
 # Constants
 OUTPUT_DIR = "/tmp/output"
 LOG_DIR = "/tmp/logs"
-LOGIN_SCRIPT = "./"
-LIST_PRODUCTS_SCRIPT = "./"
-GET_SWAGGER_SCRIPT = "./"
-API_PUSH_URL = ""
-HEADERS = {
-    "Content-Type": "application/json",
-    "User-Agent": "",
-    "x-api-key": "",
-    "x-apigw-api-id": "",
-    "x-app-cat-id": "sdsadas",
-    "x-database-schema": "",
-    "x-fapi-financial-id": "sdsadsadasdsadsa",
-    "x-request-id": "abcd"
-}
+
+
 
 # Configure logging
 os.makedirs(LOG_DIR, exist_ok=True)
-log_filename = os.path.join(LOG_DIR, f"swagger_plan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+log_filename = os.path.join(LOG_DIR, f"swagger_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -100,8 +88,8 @@ def load_product_list():
             return None
         return data
 
-def download_swagger(env, catalog, name, version):
-    """Downloads Swagger file for a specific API."""
+def download_and_save_swagger(env, catalog, name, version):
+    """Downloads and saves Swagger content to a file."""
     logging.info(f"Downloading Swagger for {name}:{version}")
     get_swagger_command = [GET_SWAGGER_SCRIPT, env, f"{name}:{version}", catalog]
     result = run_command(
@@ -110,13 +98,29 @@ def download_swagger(env, catalog, name, version):
         f"Error downloading Swagger for {name}:{version}",
         capture_output=True
     )
+
     if result and result.stdout:
-        swagger_content = result.stdout
-        swagger_json = json.loads(swagger_content)
-        basepath = swagger_json.get("basePath", "")
-        return swagger_content, basepath
+        swagger_content = result.stdout.strip()
+        swagger_output_file = os.path.join(OUTPUT_DIR, f"{name}_{version}.json")
+        
+        with open(swagger_output_file, 'w') as output_file:
+            output_file.write(swagger_content)
+        
+        logging.info(f"Swagger saved to {swagger_output_file}")
+        return swagger_output_file
     else:
         logging.warning(f"No Swagger content found for {name}:{version}")
+        return None
+
+def load_swagger_file(swagger_file):
+    """Loads and parses Swagger content from a saved file."""
+    try:
+        with open(swagger_file, 'r') as f:
+            swagger_json = json.load(f)
+            basepath = swagger_json.get("basePath", "")
+            return swagger_json, basepath
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        logging.error(f"Failed to load or parse Swagger file {swagger_file}: {e}")
         return None, None
 
 def push_to_database(product, plan, swagger_content, basepath):
@@ -165,26 +169,34 @@ def process_product_list(env, catalog, product_list):
     """Processes each product and plan, downloads Swagger, and pushes to the database."""
     for product in product_list.get('results', []):
         prod_details = {
-            "name": product['name'],
-            "title": product['title'],
-            "state": product['state'],
-            "version": product['version'],
+            "name": product.get('name', ''),
+            "title": product.get('title', ''),
+            "state": product.get('state', ''),
+            "version": product.get('version', ''),
             "env": env,
             "space": product.get('space', ''),
             "org": product.get('org', '')
         }
+
         for plan in product.get('plans', []):
             plan_details = {
-                "name": plan['name'],
-                "title": plan['title'],
-                "version": plan['version'],
-                "created": plan['created'],
-                "updated": plan['updated']
+                "name": plan.get('name', ''),
+                "title": plan.get('title', ''),
+                "version": plan.get('version', ''),
+                "created": plan.get('created', ''),
+                "updated": plan.get('updated', '')
             }
+
             for api in plan.get('apis', []):
-                swagger_content, basepath = download_swagger(env, catalog, api['name'], api['version'])
-                if swagger_content:
-                    push_to_database(prod_details, plan_details, swagger_content, basepath)
+                api_name = api.get('name', '')
+                api_version = api.get('version', '')
+
+                if api_name and api_version:
+                    swagger_file = download_and_save_swagger(env, catalog, api_name, api_version)
+                    if swagger_file:
+                        swagger_content, basepath = load_swagger_file(swagger_file)
+                        if swagger_content:
+                            push_to_database(prod_details, plan_details, swagger_content, basepath)
 
 def main():
     setup_output_directory()
@@ -197,14 +209,10 @@ def main():
 
     login(env, username, password)
     list_products(env, catalog, space)
-    
+
     product_list = load_product_list()
     if not product_list:
         logging.error("Exiting due to empty or invalid product list.")
         exit(1)
 
-    process_product_list(env, catalog, product_list)
-    logging.info("Completed all operations successfully.")
-
-if __name__ == "__main__":
-    main()
+   
