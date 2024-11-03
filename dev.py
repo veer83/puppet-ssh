@@ -4,14 +4,18 @@ import json
 import getpass
 import yaml
 import logging
-from glob import glob
 from datetime import datetime
 
 # Constants
 OUTPUT_DIR = "/tmp/output"
 LOG_DIR = "/tmp/logs"
-
-
+LOGIN_SCRIPT = "./"
+LIST_PRODUCTS_SCRIPT = ".
+GET_SWAGGER_SCRIPT = "."
+API_PUSH_URL = ""
+HEADERS = {
+  
+}
 
 # Configure logging
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -48,16 +52,6 @@ def setup_output_directory():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     logging.info(f"Created output directory at {OUTPUT_DIR}")
 
-def find_latest_yaml_file():
-    """Finds the latest YAML file in the output directory."""
-    yaml_files = glob(os.path.join(OUTPUT_DIR, "*.yaml"))
-    if not yaml_files:
-        logging.error("Error: No YAML files found in the output directory.")
-        return None
-    latest_file = max(yaml_files, key=os.path.getctime)
-    logging.info(f"Using product list file: {latest_file}")
-    return latest_file
-
 def login(env, username, password):
     """Logs into the environment using the login script."""
     run_command(
@@ -76,127 +70,60 @@ def list_products(env, catalog, space):
 
 def load_product_list():
     """Loads the product list from the latest YAML file in the output directory."""
-    file_path = find_latest_yaml_file()
-    if not file_path:
-        logging.error("Exiting due to missing product list file.")
-        exit(1)
+    yaml_files = sorted(
+        [f for f in os.listdir(OUTPUT_DIR) if f.endswith(".yaml")],
+        key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)),
+        reverse=True
+    )
+    if not yaml_files:
+        logging.error("Error: No YAML files found in the output directory.")
+        return None
 
-    with open(file_path, 'r') as f:
+    latest_file = os.path.join(OUTPUT_DIR, yaml_files[0])
+    logging.info(f"Using product list file: {latest_file}")
+
+    with open(latest_file, 'r') as f:
         data = yaml.safe_load(f) or {}
         if not data:
             logging.error("Error: Product list is empty or could not be loaded properly.")
             return None
         return data
 
-def download_and_save_swagger(env, catalog, name, version):
-    """Downloads and saves Swagger content to a file."""
-    logging.info(f"Downloading Swagger for {name}:{version}")
-    get_swagger_command = [GET_SWAGGER_SCRIPT, env, f"{name}:{version}", catalog]
-    result = run_command(
-        get_swagger_command,
-        None,
-        f"Error downloading Swagger for {name}:{version}",
-        capture_output=True
-    )
-
-    if result and result.stdout:
-        swagger_content = result.stdout.strip()
-        swagger_output_file = os.path.join(OUTPUT_DIR, f"{name}_{version}.json")
-        
-        with open(swagger_output_file, 'w') as output_file:
-            output_file.write(swagger_content)
-        
-        logging.info(f"Swagger saved to {swagger_output_file}")
-        return swagger_output_file
-    else:
-        logging.warning(f"No Swagger content found for {name}:{version}")
-        return None
-
-def load_swagger_file(swagger_file):
-    """Loads and parses Swagger content from a saved file."""
-    try:
-        with open(swagger_file, 'r') as f:
-            swagger_json = json.load(f)
-            basepath = swagger_json.get("basePath", "")
-            return swagger_json, basepath
-    except (json.JSONDecodeError, FileNotFoundError) as e:
-        logging.error(f"Failed to load or parse Swagger file {swagger_file}: {e}")
-        return None, None
-
-def push_to_database(product, plan, swagger_content, basepath):
-    """Formats data and pushes it to the database using a POST request."""
-    data = {
-        "prod_name": product['name'],
-        "prod_title": product['title'],
-        "prod_state": product['state'],
-        "prod_version": product['version'],
-        "env": product['env'],
-        "space": product['space'],
-        "org": product['org'],
-        "plan_name": plan['name'],
-        "plan_title": plan['title'],
-        "plan_version": plan['version'],
-        "swagger": swagger_content,
-        "plan_created_date": plan['created'],
-        "plan_updated_date": plan['updated'],
-        "basepath": basepath,
-        "description": plan.get("description", "")
-    }
-    json_data = json.dumps(data, indent=4)
-
-    curl_command = [
-        "curl", "--insecure", "--request", "POST",
-        "--url", API_PUSH_URL,
-        "--header", f"Content-Type: {HEADERS['Content-Type']}",
-        "--header", f"User-Agent: {HEADERS['User-Agent']}",
-        "--header", f"x-api-key: {HEADERS['x-api-key']}",
-        "--header", f"x-apigw-api-id: {HEADERS['x-apigw-api-id']}",
-        "--header", f"x-app-cat-id: {HEADERS['x-app-cat-id']}",
-        "--header", f"x-database-schema: {HEADERS['x-database-schema']}",
-        "--header", f"x-fapi-financial-id: {HEADERS['x-fapi-financial-id']}",
-        "--header", f"x-request-id: {HEADERS['x-request-id']}",
-        "--data", json_data
-    ]
-
-    try:
-        subprocess.run(curl_command, check=True)
-        logging.info(f"POST request successful for product: {product['name']}, plan: {plan['name']}")
-    except subprocess.CalledProcessError as e:
-        logging.error(f"Failed POST request for product: {product['name']}, plan: {plan['name']}")
-        logging.error(e)
-
-def process_product_list(env, catalog, product_list):
-    """Processes each product and plan, downloads Swagger, and pushes to the database."""
+def download_swagger(env, catalog, product_list):
+    """Downloads and saves Swagger files for each API in the product list."""
     for product in product_list.get('results', []):
-        prod_details = {
-            "name": product.get('name', ''),
-            "title": product.get('title', ''),
-            "state": product.get('state', ''),
-            "version": product.get('version', ''),
-            "env": env,
-            "space": product.get('space', ''),
-            "org": product.get('org', '')
-        }
-
+        product_name = product.get('name')
         for plan in product.get('plans', []):
-            plan_details = {
-                "name": plan.get('name', ''),
-                "title": plan.get('title', ''),
-                "version": plan.get('version', ''),
-                "created": plan.get('created', ''),
-                "updated": plan.get('updated', '')
-            }
-
+            plan_name = plan.get('name')
             for api in plan.get('apis', []):
-                api_name = api.get('name', '')
-                api_version = api.get('version', '')
+                name = api.get('name')
+                version = api.get('version')
+                
+                if name and version:
+                    logging.info(f"Downloading Swagger for {name}:{version} under product {product_name} and plan {plan_name}")
 
-                if api_name and api_version:
-                    swagger_file = download_and_save_swagger(env, catalog, api_name, api_version)
-                    if swagger_file:
-                        swagger_content, basepath = load_swagger_file(swagger_file)
-                        if swagger_content:
-                            push_to_database(prod_details, plan_details, swagger_content, basepath)
+                    get_swagger_command = [GET_SWAGGER_SCRIPT, env, f"{name}:{version}", catalog, OUTPUT_DIR]
+                    result = run_command(
+                        get_swagger_command,
+                        None,
+                        f"Error downloading Swagger for {name}:{version}",
+                        capture_output=True
+                    )
+
+                    if result and result.stdout:
+                        save_swagger_file(name, version, result.stdout)
+                    else:
+                        logging.warning(f"No Swagger content found for {name}:{version}")
+
+def save_swagger_file(name, version, content):
+    """Saves Swagger content to a JSON file."""
+    swagger_output_file = os.path.join(OUTPUT_DIR, f"{name}_{version}.json")
+    try:
+        with open(swagger_output_file, 'w') as output_file:
+            output_file.write(content)
+        logging.info(f"Swagger successfully saved to {swagger_output_file}")
+    except Exception as e:
+        logging.error(f"Failed to save Swagger for {name}:{version} - {e}")
 
 def main():
     setup_output_directory()
@@ -215,4 +142,8 @@ def main():
         logging.error("Exiting due to empty or invalid product list.")
         exit(1)
 
-   
+    download_swagger(env, catalog, product_list)
+    logging.info("Completed all operations successfully.")
+
+if __name__ == "__main__":
+    main()
