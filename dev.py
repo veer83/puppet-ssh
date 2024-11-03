@@ -1,89 +1,155 @@
-import json
+import os
 import subprocess
+import json
 import logging
-import argparse
+import shutil
+from datetime import datetime
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging
+log_dir = "/tmp/logs"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
 
-# Function to execute oc commands and capture output
-def run_oc_command(command: list) -> str:
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # Log to console
+        logging.FileHandler(f"{log_dir}/swagger_download_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+    ]
+)
+
+# API endpoint and headers
+api_url = "https://sbx-shr-ue1-aws-apigw01.devhcloud.bmogc.net/sandbox/api/apic-doc/save"
+headers = {
+    "Content-Type": "application/json",
+    "User-Agent": "",
+    "x-api-key": "",
+    "x-apigw-api-id": "",
+    "x-app-cat-id": "sdsadas",
+    "x-database-schema": "",
+    "x-fapi-financial-id": "sdsadsadasdsadsa",
+    "x-request-id": "abcd"
+}
+
+# Paths to shell scripts and output directory
+
+output_dir = "/tmp/output"
+
+# Get user input
+env = input("Enter the environment (e.g., dv1, qa, prod): ").strip().lower()
+catalog_name = input("Enter the catalog name: ").strip()
+
+def run_login_script():
+    """Runs the login shell script to authenticate."""
     try:
-        result = subprocess.run(command, capture_output=True, text=True, check=True)
-        return result.stdout
+        subprocess.run(["sudo", LOGIN_SCRIPT_PATH, env], check=True)
+        logging.info("Login script executed successfully.")
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error running command {command}: {e}")
-        return None
+        logging.error("Failed to run login script.")
+        logging.error(e)
+        raise
 
-# Fetch build configs from the project
-def get_build_configs(project_name: str):
-    logging.info(f"Fetching build configs for project {project_name}")
-    output = run_oc_command(["oc", "get", "bc", "-n", project_name, "-o", "json"])
-    return json.loads(output) if output else None
+def run_list_products_script():
+    """Runs the script to list products and store the output in the output directory."""
+    try:
+        subprocess.run(["sudo", LIST_PRODUCTS_SCRIPT_PATH, env, output_dir, catalog_name], check=True)
+        logging.info("List products script executed successfully.")
+    except subprocess.CalledProcessError as e:
+        logging.error("Failed to run list products script.")
+        logging.error(e)
+        raise
 
-# Check if a build config matches the criteria
-def matches_criteria(bc: dict) -> bool:
-    apr = bc["spec"]["source"].get("c", "")
-  gyi = bc["spec"]["source"]["gt"].get("u", "")
-    juy = bc["spec"]["source"]["gt"].get("r", "")
-    
-    return (ap == "ap" and
-            i == "gp" and
-            r == "cp")
+def run_swagger_download_script():
+    """Runs the shell script to download Swagger files."""
+    try:
+        subprocess.run(["sudo", SWAGGER_DOWNLOAD_SCRIPT_PATH, env, output_dir, catalog_name], check=True)
+        logging.info("Swagger download script executed successfully.")
+    except subprocess.CalledProcessError as e:
+        logging.error("Failed to run Swagger download script.")
+        logging.error(e)
+        raise
 
-# Function to count and print matching build configs
-def count_and_print_matching_build_configs(projects: list) -> None:
-    total_count = 0  # To count the total number of matching build configs
-    
-    for project_name in projects:
-        logging.info(f"Processing project: {project_name}")
-        build_configs = get_build_configs(project_name)
+def read_swagger_file(file_path):
+    """Reads the Swagger file content."""
+    with open(file_path, "r") as file:
+        content = file.read()
+    return content
 
-        if build_configs:
-            matching_count = 0  # To count matches within each project
-            for bc in build_configs.get("items", []):
-                bc_name = bc["metadata"]["name"]
+def send_post_request(data):
+    """Sends a POST request to the API with provided Swagger data using sudo curl with --insecure."""
+    curl_command = [
+        "sudo", "curl", "--insecure", "--request", "POST",
+        "--url", api_url,
+        "--header", f"Content-Type: {headers['Content-Type']}",
+        "--header", f"User-Agent: {headers['User-Agent']}",
+        "--header", f"x-api-key: {headers['x-api-key']}",
+        "--header", f"x-apigw-api-id: {headers['x-apigw-api-id']}",
+        "--header", f"x-app-cat-id: {headers['x-app-cat-id']}",
+        "--header", f"x-database-schema: {headers['x-database-schema']}",
+        "--header", f"x-fapi-financial-id: {headers['x-fapi-financial-id']}",
+        "--header", f"x-request-id: {headers['x-request-id']}",
+        "--data", json.dumps(data)
+    ]
+    try:
+        subprocess.run(curl_command, check=True)
+        logging.info(f"POST request successful for Swagger file.")
+    except subprocess.CalledProcessError as e:
+        logging.error("Failed POST request for Swagger file.")
+        logging.error(e)
 
-                if matches_criteria(bc):
-                    logging.info(f"Matching BuildConfig: {bc_name} in project {project_name}")
-                    matching_count += 1
-                    total_count += 1
-            
-            logging.info(f"Found {matching_count} matching build configs in project {project_name}")
-        else:
-            logging.warning(f"No build configs found for project {project_name}")
-    
-    logging.info(f"Total matching build configs across all projects: {total_count}")
+def process_swagger_files():
+    """Processes each Swagger file in the output directory."""
+    swagger_files = os.listdir(output_dir)
+    if not swagger_files:
+        logging.error("No Swagger files found in the output directory.")
+        return
 
-# Function to load projects dynamically (either from input or config)
-def load_projects(project_file: str = None, specific_projects: list = None) -> list:
-    # Load from a file if specified
-    if project_file:
-        with open(project_file, 'r') as file:
-            return [line.strip() for line in file if line.strip()]
-    # Use projects provided by the user
-    elif specific_projects:
-        return specific_projects
-    else:
-        return []
+    for swagger_file in swagger_files:
+        file_path = os.path.join(output_dir, swagger_file)
+        logging.info(f"Processing Swagger file: {file_path}")
 
-# Entry point with arguments for flexibility
+        # Read file content and send POST request
+        swagger_content = read_swagger_file(file_path)
+        post_data = {
+            "product": swagger_file.split("_")[0],
+            "product_version": swagger_file.split("_")[1].replace(".yaml", ""),
+            "swagger": swagger_content
+        }
+
+        # Log data to be sent
+        logging.info("Sending Swagger data to API:")
+        logging.info(json.dumps(post_data, indent=4))
+
+        # Send POST request
+        send_post_request(post_data)
+
+def cleanup_output_directory(directory):
+    """Removes all files in the specified directory using sudo."""
+    try:
+        if os.path.exists(directory):
+            subprocess.run(["sudo", "rm", "-rf", directory], check=True)
+            logging.info(f"Cleaned up output directory: {directory}")
+            os.makedirs(directory, exist_ok=True)  # Recreate directory after cleanup
+    except Exception as e:
+        logging.error(f"Failed to clean up output directory: {directory}")
+        logging.exception(e)
+
+def main():
+    # Authenticate using the login script
+    run_login_script()
+
+    # List products in the specified catalog
+    run_list_products_script()
+
+    # Download Swagger files
+    run_swagger_download_script()
+
+    # Process each downloaded Swagger file
+    process_swagger_files()
+
+    # Clean up the output directory
+    cleanup_output_directory(output_dir)
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Count and print matching OpenShift BuildConfigs across projects.')
-    parser.add_argument('--projects', nargs='+', help='List of specific projects to update.')
-    parser.add_argument('--project-file', help='File containing a list of projects to process (one per line).')
-    parser.add_argument('--batch-size', type=int, default=5, help='Number of projects to process in a batch.')
-    args = parser.parse_args()
-
-    # Load the projects either from a file or a provided list
-    projects = load_projects(args.project_file, args.projects)
-    
-    if not projects:
-        logging.error("No projects provided. Use --projects or --project-file.")
-    else:
-        # Process in batches to avoid processing too many projects at once
-        batch_size = args.batch_size
-        for i in range(0, len(projects), batch_size):
-            project_batch = projects[i:i + batch_size]
-            logging.info(f"Processing batch of {len(project_batch)} projects")
-            count_and_print_matching_build_configs(project_batch)
+    main()
