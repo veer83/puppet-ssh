@@ -10,12 +10,12 @@ from datetime import datetime
 # Constants
 OUTPUT_DIR = "/tmp/output"
 LOG_DIR = "/tmp/logs"
-LOGIN_SCRIPT = "./apic_login.sh"
-LIST_PRODUCTS_SCRIPT = "./list_products.sh"
-GET_SWAGGER_SCRIPT = "./get_swagger_by_name.sh"
-API_PUSH_URL = 
+LOGIN_SCRIPT = ""
+LIST_PRODUCTS_SCRIPT = "."
+GET_SWAGGER_SCRIPT = ""
+API_PUSH_URL = ""
 HEADERS = {
-  
+
 }
 
 # Configure logging
@@ -94,7 +94,7 @@ def load_product_list():
         return data
 
 def download_swagger(env, catalog, product_list):
-    """Downloads and saves filtered Swagger files for each API in the product list."""
+    """Downloads, filters, saves, and pushes Swagger files for each API in the product list."""
     for product in product_list.get('results', []):
         product_name = product.get('name')
         for plan in product.get('plans', []):
@@ -117,18 +117,22 @@ def download_swagger(env, catalog, product_list):
 
                     # Process the result to capture only relevant Swagger lines
                     if result and result.stdout:
-                        swagger_content = filter_swagger_content(result.stdout)
+                        swagger_content, basepath = filter_swagger_content(result.stdout)
                         if swagger_content:
-                            save_swagger_file(name, version, swagger_content)
+                            swagger_file_path = save_swagger_file(name, version, swagger_content)
+                            if swagger_file_path:
+                                # Push the saved Swagger content to the database
+                                push_to_database(product, plan, name, version, swagger_content, basepath)
                         else:
                             logging.warning(f"No relevant Swagger content found for {name}:{version}")
                     else:
                         logging.warning(f"No Swagger content found for {name}:{version}")
 
 def filter_swagger_content(raw_content):
-    """Filters the Swagger content to start from 'openapi' or 'swagger'."""
+    """Filters the Swagger content to start from 'openapi' or 'swagger' and extracts the basePath."""
     swagger_lines = []
     capture = False
+    basepath = ""
 
     for line in raw_content.splitlines():
         if 'openapi' in line or 'swagger' in line:
@@ -136,8 +140,12 @@ def filter_swagger_content(raw_content):
         if capture:
             swagger_lines.append(line)
 
-    # Return the filtered content if any relevant lines were found
-    return "\n".join(swagger_lines) if swagger_lines else None
+        # Extract the basePath if it's found
+        if 'basePath' in line:
+            basepath = line.split(':', 1)[1].strip().strip('"')
+
+    # Return the filtered content and basepath if any relevant lines were found
+    return "\n".join(swagger_lines) if swagger_lines else None, basepath
 
 def save_swagger_file(name, version, content):
     """Saves filtered Swagger content to a JSON file."""
@@ -146,12 +154,52 @@ def save_swagger_file(name, version, content):
         with open(swagger_output_file, 'w') as output_file:
             output_file.write(content)
         logging.info(f"Swagger successfully saved to {swagger_output_file}")
+        return swagger_output_file
     except Exception as e:
         logging.error(f"Failed to save Swagger for {name}:{version} - {e}")
+        return None
 
-def process_product_list(env, catalog, product_list):
-    """Processes each product and plan, downloads Swagger, and saves it to the database."""
-    download_swagger(env, catalog, product_list)
+def push_to_database(product, plan, api_name, api_version, swagger_content, basepath):
+    """Formats data and pushes it to the database using a POST request."""
+    data = {
+        "prod_name": product.get('name', ''),
+        "prod_title": product.get('title', ''),
+        "prod_state": product.get('state', ''),
+        "prod_version": product.get('version', ''),
+        "env": product.get('env', ''),
+        "space": product.get('space', ''),
+        "org": product.get('org', ''),
+        "plan_name": plan.get('name', ''),
+        "plan_title": plan.get('title', ''),
+        "plan_version": plan.get('version', ''),
+        "swagger": swagger_content,
+        "basepath": basepath,
+        "description": plan.get('description', ''),
+        "api_name": api_name,
+        "api_version": api_version,
+    }
+    json_data = json.dumps(data, indent=4)
+
+    curl_command = [
+        "curl", "--insecure", "--request", "POST",
+        "--url", API_PUSH_URL,
+        "--header", f"Content-Type: {HEADERS['Content-Type']}",
+        "--header", f"User-Agent: {HEADERS['User-Agent']}",
+        "--header", f"x-api-key: {HEADERS['x-api-key']}",
+        "--header", f"x-apigw-api-id: {HEADERS['x-apigw-api-id']}",
+        "--header", f"x-app-cat-id: {HEADERS['x-app-cat-id']}",
+        "--header", f"x-database-schema: {HEADERS['x-database-schema']}",
+        "--header", f"x-fapi-financial-id: {HEADERS['x-fapi-financial-id']}",
+        "--header", f"x-request-id: {HEADERS['x-request-id']}",
+        "--data", json_data
+    ]
+
+    try:
+        subprocess.run(curl_command, check=True)
+        logging.info(f"POST request successful for product: {product.get('name')} plan: {plan.get('name')}")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed POST request for product: {product.get('name')} plan: {plan.get('name')}")
+        logging.error(e)
 
 def main():
     setup_output_directory()
