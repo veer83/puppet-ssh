@@ -4,15 +4,16 @@ import json
 import getpass
 import yaml
 import logging
+from glob import glob
 from datetime import datetime
 
 # Constants
 OUTPUT_DIR = "/tmp/output"
 LOG_DIR = "/tmp/logs"
-LOGIN_SCRIPT = "./"
-LIST_PRODUCTS_SCRIPT = ".
-GET_SWAGGER_SCRIPT = "."
-API_PUSH_URL = ""
+LOGIN_SCRIPT = "./apic_login.sh"
+LIST_PRODUCTS_SCRIPT = "./list_products.sh"
+GET_SWAGGER_SCRIPT = "./get_swagger_by_name.sh"
+API_PUSH_URL = 
 HEADERS = {
   
 }
@@ -52,6 +53,16 @@ def setup_output_directory():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     logging.info(f"Created output directory at {OUTPUT_DIR}")
 
+def find_latest_yaml_file():
+    """Finds the latest YAML file in the output directory."""
+    yaml_files = glob(os.path.join(OUTPUT_DIR, "*.yaml"))
+    if not yaml_files:
+        logging.error("Error: No YAML files found in the output directory.")
+        return None
+    latest_file = max(yaml_files, key=os.path.getctime)
+    logging.info(f"Using product list file: {latest_file}")
+    return latest_file
+
 def login(env, username, password):
     """Logs into the environment using the login script."""
     run_command(
@@ -70,19 +81,12 @@ def list_products(env, catalog, space):
 
 def load_product_list():
     """Loads the product list from the latest YAML file in the output directory."""
-    yaml_files = sorted(
-        [f for f in os.listdir(OUTPUT_DIR) if f.endswith(".yaml")],
-        key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)),
-        reverse=True
-    )
-    if not yaml_files:
-        logging.error("Error: No YAML files found in the output directory.")
-        return None
+    file_path = find_latest_yaml_file()
+    if not file_path:
+        logging.error("Exiting due to missing product list file.")
+        exit(1)
 
-    latest_file = os.path.join(OUTPUT_DIR, yaml_files[0])
-    logging.info(f"Using product list file: {latest_file}")
-
-    with open(latest_file, 'r') as f:
+    with open(file_path, 'r') as f:
         data = yaml.safe_load(f) or {}
         if not data:
             logging.error("Error: Product list is empty or could not be loaded properly.")
@@ -90,7 +94,7 @@ def load_product_list():
         return data
 
 def download_swagger(env, catalog, product_list):
-    """Downloads and saves Swagger files for each API in the product list."""
+    """Downloads and saves filtered Swagger files for each API in the product list."""
     for product in product_list.get('results', []):
         product_name = product.get('name')
         for plan in product.get('plans', []):
@@ -102,6 +106,7 @@ def download_swagger(env, catalog, product_list):
                 if name and version:
                     logging.info(f"Downloading Swagger for {name}:{version} under product {product_name} and plan {plan_name}")
 
+                    # Construct the shell command to get Swagger content
                     get_swagger_command = [GET_SWAGGER_SCRIPT, env, f"{name}:{version}", catalog, OUTPUT_DIR]
                     result = run_command(
                         get_swagger_command,
@@ -110,13 +115,32 @@ def download_swagger(env, catalog, product_list):
                         capture_output=True
                     )
 
+                    # Process the result to capture only relevant Swagger lines
                     if result and result.stdout:
-                        save_swagger_file(name, version, result.stdout)
+                        swagger_content = filter_swagger_content(result.stdout)
+                        if swagger_content:
+                            save_swagger_file(name, version, swagger_content)
+                        else:
+                            logging.warning(f"No relevant Swagger content found for {name}:{version}")
                     else:
                         logging.warning(f"No Swagger content found for {name}:{version}")
 
+def filter_swagger_content(raw_content):
+    """Filters the Swagger content to start from 'openapi' or 'swagger'."""
+    swagger_lines = []
+    capture = False
+
+    for line in raw_content.splitlines():
+        if 'openapi' in line or 'swagger' in line:
+            capture = True  # Start capturing lines when "openapi" or "swagger" is found
+        if capture:
+            swagger_lines.append(line)
+
+    # Return the filtered content if any relevant lines were found
+    return "\n".join(swagger_lines) if swagger_lines else None
+
 def save_swagger_file(name, version, content):
-    """Saves Swagger content to a JSON file."""
+    """Saves filtered Swagger content to a JSON file."""
     swagger_output_file = os.path.join(OUTPUT_DIR, f"{name}_{version}.json")
     try:
         with open(swagger_output_file, 'w') as output_file:
@@ -124,6 +148,10 @@ def save_swagger_file(name, version, content):
         logging.info(f"Swagger successfully saved to {swagger_output_file}")
     except Exception as e:
         logging.error(f"Failed to save Swagger for {name}:{version} - {e}")
+
+def process_product_list(env, catalog, product_list):
+    """Processes each product and plan, downloads Swagger, and saves it to the database."""
+    download_swagger(env, catalog, product_list)
 
 def main():
     setup_output_directory()
@@ -142,7 +170,7 @@ def main():
         logging.error("Exiting due to empty or invalid product list.")
         exit(1)
 
-    download_swagger(env, catalog, product_list)
+    process_product_list(env, catalog, product_list)
     logging.info("Completed all operations successfully.")
 
 if __name__ == "__main__":
