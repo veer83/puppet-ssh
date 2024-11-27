@@ -1,19 +1,33 @@
----
-- name: Execute chef-client and grep for a specific recipe
-  hosts: your_targeted_hosts
-  become: yes
-  tasks:
-    - name: Run chef-client
-      command: chef-client
-      register: chef_client_output
-      ignore_errors: true  # Prevent playbook from stopping if chef-client fails
+variables:
+  - name: outputValue
+    ${{ if eq(variables['agentpool'], 'Prod') }}:
+      value: "${ parameters.docker_snapshots_repo }.artifactory-qa.bmogc.net/${ parameters.deploy_service_name }:${ IMAGE_TAG }"
+    ${{ else }}:
+      value: "bmostaging.jfrog.io/${ parameters.docker_snapshots_repo }/${ parameters.deploy_service_name }:${ IMAGE_TAG }"
 
-    - name: Check if specific recipe was applied
-      shell: echo "{{ chef_client_output.stdout }}" | grep 'my_specific_recipe'
-      register: grep_output
-      ignore_errors: true
-
-    - name: Print grep result
-      debug:
-        var: grep_output.stdout_lines
-      when: grep_output.rc == 0  # Condition to check if grep found something
+steps:
+  - task: oc-cmd02
+    displayName: 'Patch Build Config'
+    inputs:
+      connectionType: 'OpenShift Connection Service'
+      openshiftService: ${{ parameters.openshiftService }}
+      cmd: >
+        oc patch bc/${{ parameters.deploy_service_name }} --type "json" -p '[
+          {
+            "op": "replace",
+            "path": "/spec/output/to/name",
+            "value": "${outputValue}"
+          },
+          {
+            "op": "replace",
+            "path": "/spec/source/git/httpProxy",
+            "value": ""
+          },
+          {
+            "op": "replace",
+            "path": "/spec/source/git/httpsProxy",
+            "value": ""
+          }
+        ]'
+    uselocalOc: true
+    condition: succeeded()
