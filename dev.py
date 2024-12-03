@@ -6,11 +6,10 @@ from datetime import datetime
 
 # Constants
 LOG_DIR = "/tmp/logs"
-GET_SWAGGER_SCRIPT = "./get_swagger_by_name.sh"
+GET_SWAGGER_SCRIPT = "./ge"
 API_PUSH_URL = ""
 HEADERS = {
- 
-}
+  
 
 # Configure logging
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -113,7 +112,7 @@ def push_to_database(product, plan, api_name, api_version, swagger_content, base
 
     json_data = json.dumps(data, indent=4)
     logging.info(f"Payload being sent for product: {product.get('name')} plan: {plan.get('name')}")
-    logging.info(f"Payload data: {json_data}")
+    logging.info(f"Payload data: {json.dumps(data, indent=4)}")  # Log the complete payload data
 
     curl_command = [
         "curl", "--insecure", "--request", "POST",
