@@ -35,11 +35,11 @@ def filter_swagger_content(raw_content):
                     "info_contact_email": info.get("contact", {}).get("email", ""),
                     "info_contact_url": info.get("contact", {}).get("url", ""),
                     "info_x_api_id": info.get("x-api-id", ""),
-                    "info_bmo_api_type": info.get("x-bmo-api-type", ""),
-                    "info_bmo_api_provider_id": info.get("x-bmo-api-provider-id", ""),
-                    "info_bmoservicedomain_name": info.get("x-bmo-service-domain-name", ""),
+                    "info_xcv_api_type": info.get("x-xcv-api-type", ""),
+                    "info_xcv_api_provider_id": info.get("x-xcv-api-provider-id", ""),
+                    "info_xcvservicedomain_name": info.get("x-xcv-service-domain-name", ""),
                     "info_x_api_specification_compliant": info.get("x-api-specification-compliant", ""),
-                    "info_x_bmo_jira": info.get("x-bmo-jira", ""),
+                    "info_x_xcv_jira": info.get("x-xcv-jira", ""),
                     "info_x_template_version": info.get("x-template-version", "")
                 }
         except json.JSONDecodeError as e:
