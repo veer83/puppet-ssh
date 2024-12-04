@@ -2,14 +2,15 @@ import os
 import json
 import subprocess
 import logging
+import yaml
 from datetime import datetime
 
 # Constants
 LOG_DIR = "/tmp/logs"
-GET_SWAGGER_SCRIPT = "./ge"
-API_PUSH_URL = ""
-HEADERS = {
-  
+GET_SWAGGER_SCRIPT = "./get_swagger_by_name.sh"
+LIST_PRODUCTS_SCRIPT = "./list_products.sh"
+OUTPUT_DIR = "/tmp/output"
+
 
 # Configure logging
 os.makedirs(LOG_DIR, exist_ok=True)
@@ -80,6 +81,36 @@ def filter_swagger_content(raw_content):
         }
 
     return "\n".join(swagger_lines), basepath, info_data
+
+def list_products(env, catalog, space):
+    """Runs the product listing script and generates a product list YAML."""
+    run_command(
+        [LIST_PRODUCTS_SCRIPT, env, OUTPUT_DIR, "0", catalog, space],
+        "Product list downloaded successfully.",
+        "Error downloading product list"
+    )
+
+def find_latest_yaml_file():
+    """Finds the latest YAML file in the output directory."""
+    yaml_files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith('.yaml')]
+    if not yaml_files:
+        return None
+    latest_file = max(yaml_files, key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)))
+    return os.path.join(OUTPUT_DIR, latest_file)
+
+def load_product_list():
+    """Loads the product list from the latest YAML file in the output directory."""
+    file_path = find_latest_yaml_file()
+    if not file_path:
+        logging.error("Exiting due to missing product list file.")
+        exit(1)
+
+    with open(file_path, 'r') as f:
+        data = yaml.safe_load(f) or {}
+        if not data:
+            logging.error("Error: Product list is empty or could not be loaded properly.")
+            return None
+    return data
 
 # Database Push Function
 def push_to_database(product, plan, api_name, api_version, swagger_content, basepath, env, space, org, created_date, updated_date, info_data):
@@ -180,8 +211,11 @@ def main():
     space = os.getenv("SPACE_NAME", "default_space")
     org = os.getenv("ORG_NAME", "default_org")
 
+    # Generate the product list
+    list_products(env, catalog, space)
+    
     # Load product list from YAML or any input file
-    product_list = load_product_list()  # Ensure you implement this function to read the file
+    product_list = load_product_list()
     if not product_list:
         logging.error("Exiting due to empty or invalid product list.")
         exit(1)
