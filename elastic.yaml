@@ -1,1 +1,81 @@
-dfd
+input {
+  beats {
+    port => 5044
+  }
+}
+
+filter {
+  if [kubernetes] {
+    mutate {
+      add_field => { "source_type" => "kubernetes" }
+    }
+  }
+
+  json {
+    source => "message"
+    skip_on_invalid_json => true
+  }
+
+  date {
+    match => ["@timestamp", "ISO8601"]
+    target => "@timestamp"
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["https://elastic1:9200", "https://elastic2:9200"]
+    index => "main-k8s-logs-%{+YYYY.MM.dd}"
+    ssl => true
+    ssl_certificate_verification => false
+    user => "elastic"
+    password => "your_password"
+  }
+
+  stdout {
+    codec => rubydebug
+  }
+}
+
+containers:
+  - name: job
+    image: your-job
+    volumeMounts:
+      - name: logs
+        mountPath: /appvol/application/logs
+  - name: filebeat
+    image: <nexus>/filebeat:7.18.2
+    args: ["-c", "/etc/filebeat/filebeat.yml", "-e"]
+    volumeMounts:
+      - name: config
+        mountPath: /etc/filebeat
+      - name: logs
+        mountPath: /appvol/application/logs
+volumes:
+  - name: logs
+    emptyDir: {}
+  - name: config
+    configMap:
+      name: filebeat-config
+
+
+
+
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /appvol/application/logs/*
+
+output.logstash:
+  hosts: ["logstashserv1:5044", "logstashserv2:5044"]
+  loadbalance: true
+  ssl.enabled: false
+
+processors:
+  - add_kubernetes_metadata: ~
+  - add_host_metadata: ~
+  - add_cloud_metadata: ~
+
+logging.level: info
+
